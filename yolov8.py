@@ -30,8 +30,8 @@ class Bottleneck(nn.Module):
     def __init__(self, c1, c2, shortcut: bool, groups=1, kernels: list = (3,3), channel_factor=0.5):
         super().__init__()
         c_ = int(c2 * channel_factor)
-        self.cv1 = Conv_Block(c1, c_, kernel_size=kernels[0], stride=1, padding=0)
-        self.cv2 = Conv_Block(c_, c2, kernel_size=kernels[1], stride=1, padding=0, groups=groups)
+        self.cv1 = Conv_Block(c1, c_, kernel_size=kernels[0], stride=1, padding=1)
+        self.cv2 = Conv_Block(c_, c2, kernel_size=kernels[1], stride=1, padding=1, groups=groups)
         self.residual = c1 == c2 and shortcut
     
     def forward(self, x):
@@ -53,10 +53,7 @@ class C2f(nn.Module):
         y = list(torch.chunk(x, chunks=2, dim=1))
         y.extend(m(y[-1]) for m in self.bottleneck)
         z = y[0]
-        
-        # PROBLEMA quando fa il concat ottiene dimensioni diverse tra output del primo conv e output dei bottleneck 
         for i in y[1:]: 
-            #print(len(i[0][0]))  debug
             z = torch.cat((z, i), dim=1)
         return self.cv2(z)
     
