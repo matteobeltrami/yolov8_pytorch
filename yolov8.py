@@ -88,6 +88,44 @@ class SPPF(nn.Module):
         y = self.conv(y)
         y = y.rehape(b, 4, a)
         return y """
+
+class Darknet(nn.Module):
+    def __init__(self, w, r, d):
+        super().__init__()
+        self.b1 = nn.Sequential(
+            Conv_Block(c1=3, c2= int(64*w), kernel_size=3, stride=2, padding=1),
+            Conv_Block(int(64*w), int(128*w), kernel_size=3, stride=2, padding=1)
+        )
+        self.b2 = nn.Sequential(
+            C2f(c1=int(128*w), c2=int(128*w), n=round(3*d), shortcut=True),
+            Conv_Block(int(128*w), int(256*w), 3, 2, 1),
+            C2f(int(256*w), int(256*w), round(6*d), True)
+        )
+        self.b3 = nn.Sequential(
+            Conv_Block(int(256*w), int(512*w), kernel_size=3, stride=2, padding=1), 
+            C2f(int(512*w), int(512*w), round(6*d), True)
+        )
+        self.b4 = nn.Sequential(
+            Conv_Block(int(512*w), int(512*w*r), kernel_size=3, stride=2, padding=1), 
+            C2f(int(512*w*r), int(512*w*r), round(3*d), True)
+        )
+        self.b5 = nn.Sequential(
+            Conv_Block(c1=3, c2= int(64*w), kernel_size=3, stride=2, padding=1),
+            Conv_Block(int(64*w), int(128*w), kernel_size=3, stride=2, padding=1)
+        )
+        
+        self.b5 = SPPF(int(512*w*r), int(512*w*r), 5)
+
+    def return_modules(self):
+        return [*self.b1, *self.b2, *self.b3, *self.b4, *self.b5]
+
+    def forward(self, x):
+        x1 = self.b1(x)
+        x2 = self.b2(x1)
+        x3 = self.b3(x2)
+        x4 = self.b4(x3)
+        x5 = self.b5(x4)
+        return (x2, x3, x5)
     
 # TEST
 input=torch.randn(20, 16, 50, 100)
@@ -117,3 +155,12 @@ print("SPPF: ", output.shape)
 c = C2f(16, 33, 0) # check for n!=0
 output = c(input)
 print("C2F: ", output.shape)
+
+# backbone
+d = Darknet(1, 1, 1)
+input=torch.randn(20, 3, 50, 50)
+output = d(input)
+print("Darknet: ")
+print("x2: ", output[0].shape)
+print("x3: ", output[1].shape)
+print("x5: ", output[2].shape)
