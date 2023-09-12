@@ -4,11 +4,13 @@ import torch.nn.functional as F
 
 # this function is from the original implementation
 def autopad(k, p=None, d=1):  # kernel, padding, dilation
-  if d > 1:
-    k = d * (k - 1) + 1 if isinstance(k, int) else [d * (x - 1) + 1 for x in k]  # actual kernel-size
-  if p is None:
-    p = k // 2 if isinstance(k, int) else [x // 2 for x in k]  # auto-pad
-  return p
+    if d > 1:
+        k = d * (k - 1) + 1 if isinstance(k, int) else [d * (x - 1) + 1 for x in k]  # actual kernel-size
+    if p is None:
+        p = k // 2 if isinstance(k, int) else [x // 2 for x in k]  # auto-pad
+
+    return p
+
 
 class Conv_Block(nn.Module):
     def __init__(
