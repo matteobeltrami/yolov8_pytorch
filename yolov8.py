@@ -161,6 +161,7 @@ class SPPF(nn.Module):
         return self.cv2(y)
 
 
+# to review
 class DFL(nn.Module):
     def __init__(self, c1=16):
         super().__init__()
@@ -211,7 +212,6 @@ class Darknet(nn.Module):
         return [self.b1, self.b2, self.b3, self.b4, self.b5]
 
     def forward(self, x):
-        print(x.shape)
         x1 = self.b1(x)
         x2 = self.b2(x1)
         x3 = self.b3(x2)
@@ -312,6 +312,31 @@ class DetectionHead(nn.Module):
         return z
 
 
+class YOLOv8(nn.Module):
+    def __init__(self, w, r, d, num_classes):
+        super().__init__()
+        self.net = Darknet(w, r, d)
+        self.fpn = Yolov8Neck(w, r, d)
+        self.head = DetectionHead(
+            num_classes, filters=(int(256 * w), int(512 * w), int(512 * w * r))
+        )
+
+    def forward(self, x):
+        x = self.net(x)
+        x = self.fpn(*x)
+        return self.head(x)
+
+    def return_all_trainable_modules(self):
+        backbone_modules = [*range(10)]
+        yolov8neck_modules = [12, 15, 16, 18, 19, 21]
+        yolov8_head_weights = [(22, self.head)]
+        return [
+            *zip(backbone_modules, self.net.return_modules()),
+            *zip(yolov8neck_modules, self.fpn.return_modules()),
+            *yolov8_head_weights,
+        ]
+
+
 # TEST
 input = torch.randn(20, 16, 50, 100)
 print("Input: ", input.shape, "\n")
@@ -360,4 +385,9 @@ print("head_3: ", output[2].shape)
 # head
 h = DetectionHead(filters=(256, 512, 512))
 output = h(output)
+print(output.shape)
+
+# yolov8
+model = YOLOv8(1, 1, 1, 80)
+output = model(input)
 print(output.shape)
