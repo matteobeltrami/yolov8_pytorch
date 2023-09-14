@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import sys
+
+
 # this function is from the original implementation
 def autopad(k, p=None, d=1):  # kernel, padding, dilation
     if d > 1:
@@ -200,10 +203,6 @@ class Darknet(nn.Module):
             ),
             C2f(int(512 * w * r), int(512 * w * r), round(3 * d), True),
         )
-        self.b5 = nn.Sequential(
-            Conv_Block(c1=3, c2=int(64 * w), kernel_size=3, stride=2, padding=1),
-            Conv_Block(int(64 * w), int(128 * w), kernel_size=3, stride=2, padding=1),
-        )
 
         self.b5 = SPPF(int(512 * w * r), int(512 * w * r), 5)
 
@@ -312,7 +311,7 @@ class DetectionHead(nn.Module):
 
 
 class YOLOv8(nn.Module):
-    def __init__(self, w, r, d, num_classes):
+    def __init__(self, w, r, d, num_classes=80):
         super().__init__()
         self.net = Darknet(w, r, d)
         self.fpn = Yolov8Neck(w, r, d)
@@ -336,57 +335,76 @@ class YOLOv8(nn.Module):
         ]
 
 
-# TEST
-input = torch.randn(20, 16, 50, 100)
-print("Input: ", input.shape, "\n")
+def get_params():
+    cast = [str]
+    assert len(sys.argv) > 1
+    return [c(x) for c, x in zip(cast, sys.argv[1:])]
 
-# Upsample
-u = Upsample(2)
-output = u(input)
-print("Upsample: ", output.shape)
 
-# Conv_Block
-t = Conv_Block(16, 33, 3, stride=2)
-output = t(input)
-print("Conv_Block: ", output.shape)
+def get_variant_multiples(variant):
+    tmp = {
+        "n": (0.33, 0.25, 2.0),
+        "s": (0.33, 0.50, 2.0),
+        "m": (0.67, 0.75, 1.5),
+        "l": (1.0, 1.0, 1.0),
+        "x": (1, 1.25, 1.0),
+    }.get(variant, None)
 
-# Bottleneck
-b = Bottleneck(16, 33, False)
-output = b(input)
-print("BottleNeck: ", output.shape)
+    return tmp[1], tmp[2], tmp[0]
 
-# SPPF
-s = SPPF(16, 33)
-output = s(input)
-print("SPPF: ", output.shape)
 
-# C2f
-c = C2f(16, 33, 2)  # check for n!=0
-output = c(input)
-print("C2F: ", output.shape)
+if __name__ == "__main__":
+    # TEST
+    input = torch.randn(20, 16, 50, 100)
+    print("Input: ", input.shape, "\n")
+    
+    # Upsample
+    u = Upsample(2)
+    output = u(input)
+    print("Upsample: ", output.shape)
+    
+    # Conv_Block
+    t = Conv_Block(16, 33, 3, stride=2)
+    output = t(input)
+    print("Conv_Block: ", output.shape)
+    
+    # Bottleneck
+    b = Bottleneck(16, 33, False)
+    output = b(input)
+    print("BottleNeck: ", output.shape)
+    
+    # SPPF
+    s = SPPF(16, 33)
+    output = s(input)
+    print("SPPF: ", output.shape)
+    
+    # C2f
+    c = C2f(16, 33, 2)  # check for n!=0
+    output = c(input)
+    print("C2F: ", output.shape)
+    
+    # backbone
+    d = Darknet(1, 1, 1)
+    input = torch.randn(20, 3, 64, 64)
+    output = d(input)
+    print("Darknet: ")
+    print("x2: ", output[0].shape)
+    print("x3: ", output[1].shape)
+    print("x5: ", output[2].shape)
+    
+    # neck
+    n = Yolov8Neck(1, 1, 1)
+    output = n(*output)
+    print("head_1: ", output[0].shape)
+    print("head_2: ", output[1].shape)
+    print("head_3: ", output[2].shape)
+    
+    # head
+    h = DetectionHead(filters=(256, 512, 512))
+    output = h(output)
+    print(output.shape)
 
-# backbone
-d = Darknet(1, 1, 1)
-input = torch.randn(20, 3, 64, 64)
-output = d(input)
-print("Darknet: ")
-print("x2: ", output[0].shape)
-print("x3: ", output[1].shape)
-print("x5: ", output[2].shape)
-
-# neck
-n = Yolov8Neck(1, 1, 1)
-output = n(*output)
-print("head_1: ", output[0].shape)
-print("head_2: ", output[1].shape)
-print("head_3: ", output[2].shape)
-
-# head
-h = DetectionHead(filters=(256, 512, 512))
-output = h(output)
-print(output.shape)
-
-# yolov8
-model = YOLOv8(1, 1, 1, 80)
-output = model(input)
-print(output.shape)
+    x = torch.randn(1, 3, 224, 224)
+    model = YOLOv8(*get_variant_multiples(get_params()[0]))
+    output = model(x)
+    print(output.shape)
