@@ -146,7 +146,6 @@ class SPPF(nn.Module):
         c_ = c1 // 2
         self.cv1 = Conv_Block(c1, c_, 1, 1, padding=0)
         self.cv2 = Conv_Block(c_ * 4, c2, 1, 1, padding=0)
-        # self.maxpool = lambda x : x.pad2d((k // 2, k // 2, k // 2, k // 2)).max_pool2d(kernel_size=k, stride=1)
         self.maxpool = lambda x: F.max_pool2d(
             F.pad(x, (k // 2, k // 2, k // 2, k // 2)), kernel_size=k, stride=1
         )
@@ -161,13 +160,13 @@ class SPPF(nn.Module):
         return self.cv2(y)
 
 
-# to review
 class DFL(nn.Module):
     def __init__(self, c1=16):
         super().__init__()
         self.conv = nn.Conv2d(c1, 1, kernel_size=1, bias=False)
-        x = torch.arange(c1)
-        # nn.init.kaiming_uniform_(self.conv.weight, a=math.sqrt(5))
+        with torch.no_grad():
+            weight = torch.arange(c1).reshape(1, c1, 1, 1).float()
+            self.conv.weight.copy_(weight)
         self.c1 = c1
 
     def forward(self, x):
