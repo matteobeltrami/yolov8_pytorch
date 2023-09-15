@@ -27,6 +27,7 @@ def make_anchors(feats, strides, grid_cell_offset=0.5):
         sy = torch.arange(h, dtype=torch.float32) + grid_cell_offset
 
         grid_x, grid_y = torch.meshgrid(sx, sy, indexing="ij")  # to avoid warning
+
         anchor_points.append(torch.stack((grid_x, grid_y), dim=-1).reshape(-1, 2))
         stride_tensor.append(torch.full((h * w,), stride, dtype=torch.float32))
 
@@ -167,11 +168,12 @@ class DFL(nn.Module):
     def __init__(self, c1=16):
         super().__init__()
         self.conv = nn.Conv2d(c1, 1, kernel_size=1, bias=False)
-        with torch.no_grad():
-            weight = torch.arange(c1).reshape(1, c1, 1, 1).float()
-            self.conv.weight.copy_(weight)
+        weight = torch.arange(c1).reshape(1, c1, 1, 1).float()
+        self.conv.weight.requires_grad = False
+        self.conv.weight.copy_(weight)
         self.c1 = c1
 
+    @torch.no_grad() # TODO: check when training
     def forward(self, x):
         b, c, a = x.shape
         y = x.reshape(b, 4, self.c1, a).transpose(2, 1)
@@ -297,7 +299,7 @@ class DetectionHead(nn.Module):
             b = self.cv3[i](x[i])
             x[i] = torch.cat((a, b), dim=1)
         self.anchors, self.strides = (
-            x.transpose(0, 1) for x in make_anchors(x, self.stride, 0.5)
+            ii.transpose(0, 1) for ii in make_anchors(x, self.stride, 0.5)
         )
         y = [(i.reshape(x[0].shape[0], self.no, -1)) for i in x]
         x_cat = torch.cat((y[0], y[1], y[2]), dim=2)
@@ -395,16 +397,16 @@ if __name__ == "__main__":
     # neck
     n = Yolov8Neck(1, 1, 1)
     output = n(*output)
-    print("head_1: ", output[0].shape)
-    print("head_2: ", output[1].shape)
-    print("head_3: ", output[2].shape)
+    print("input of head_1: ", output[0].shape)
+    print("input of head_2: ", output[1].shape)
+    print("input of head_3: ", output[2].shape)
     
     # head
     h = DetectionHead(filters=(256, 512, 512))
     output = h(output)
     print(output.shape)
 
-    x = torch.randn(1, 3, 224, 224)
-    model = YOLOv8(*get_variant_multiples(get_params()[0]))
+    x = torch.randn(1, 3, 64, 64)
+    model = YOLOv8(*get_variant_multiples(get_params()[0]), num_classes=20)
     output = model(x)
     print(output.shape)
