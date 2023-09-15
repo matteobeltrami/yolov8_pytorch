@@ -2,7 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from helpers import *
+from pathlib import Path
+import numpy as np
 import sys
+import cv2
 
 
 # this function is from the original implementation
@@ -122,7 +126,7 @@ class C2f(nn.Module):
             1,
         )
         self.cv2 = Conv_Block((2 + n) * self.c, c2, 1)
-        self.bottleneck = [
+        self.bottleneck = nn.ModuleList([
             Bottleneck(
                 self.c,
                 self.c,
@@ -132,7 +136,7 @@ class C2f(nn.Module):
                 channel_factor=1.0,
             )
             for _ in range(n)
-        ]
+        ])
 
     def forward(self, x):
         x = self.cv1(x)
@@ -269,19 +273,8 @@ class DetectionHead(nn.Module):
         self.nl = len(filters)
         self.no = nc + self.ch * 4
         self.stride = [8, 16, 32]
-        self.dfl = DFL(self.ch)
         c1 = max(filters[0], self.nc)
         c2 = max((filters[0] // 4, self.ch * 4))
-        self.cv3 = nn.ModuleList(
-            [
-                nn.Sequential(
-                    Conv_Block(x, c1, 3, padding=1),
-                    Conv_Block(c1, c1, 3, padding=1),
-                    nn.Conv2d(c1, self.nc, 1),
-                )
-                for x in filters
-            ]
-        )
         self.cv2 = nn.ModuleList(
             [
                 nn.Sequential(
@@ -292,6 +285,17 @@ class DetectionHead(nn.Module):
                 for x in filters
             ]
         )
+        self.cv3 = nn.ModuleList(
+            [
+                nn.Sequential(
+                    Conv_Block(x, c1, 3, padding=1),
+                    Conv_Block(c1, c1, 3, padding=1),
+                    nn.Conv2d(c1, self.nc, 1),
+                )
+                for x in filters
+            ]
+        )
+        self.dfl = DFL(self.ch)
 
     def forward(self, x):
         for i in range(self.nl):
@@ -337,12 +341,6 @@ class YOLOv8(nn.Module):
         ]
 
 
-def get_params():
-    cast = [str]
-    assert len(sys.argv) > 1
-    return [c(x) for c, x in zip(cast, sys.argv[1:])]
-
-
 def get_variant_multiples(variant):
     tmp = {
         "n": (0.33, 0.25, 2.0),
@@ -356,57 +354,39 @@ def get_variant_multiples(variant):
 
 
 if __name__ == "__main__":
-    # TEST
-    input = torch.randn(20, 16, 50, 100)
-    print("Input: ", input.shape, "\n")
-    
-    # Upsample
-    u = Upsample(2)
-    output = u(input)
-    print("Upsample: ", output.shape)
-    
-    # Conv_Block
-    t = Conv_Block(16, 33, 3, stride=2)
-    output = t(input)
-    print("Conv_Block: ", output.shape)
-    
-    # Bottleneck
-    b = Bottleneck(16, 33, False)
-    output = b(input)
-    print("BottleNeck: ", output.shape)
-    
-    # SPPF
-    s = SPPF(16, 33)
-    output = s(input)
-    print("SPPF: ", output.shape)
-    
-    # C2f
-    c = C2f(16, 33, 2)  # check for n!=0
-    output = c(input)
-    print("C2F: ", output.shape)
-    
-    # backbone
-    d = Darknet(1, 1, 1)
-    input = torch.randn(20, 3, 64, 64)
-    output = d(input)
-    print("Darknet: ")
-    print("x2: ", output[0].shape)
-    print("x3: ", output[1].shape)
-    print("x5: ", output[2].shape)
-    
-    # neck
-    n = Yolov8Neck(1, 1, 1)
-    output = n(*output)
-    print("input of head_1: ", output[0].shape)
-    print("input of head_2: ", output[1].shape)
-    print("input of head_3: ", output[2].shape)
-    
-    # head
-    h = DetectionHead(filters=(256, 512, 512))
-    output = h(output)
-    print(output.shape)
+    assert len(sys.argv) > 1
+    print(len(sys.argv))
+    if len(sys.argv) <= 2:
+        print("Falling back on L model. Configuration was not passed.")
+        conf = "l"
+    else:
+        conf = str(sys.argv[2])
 
-    x = torch.randn(1, 3, 64, 64)
-    model = YOLOv8(*get_variant_multiples(get_params()[0]), num_classes=20)
-    output = model(x)
-    print(output.shape)
+    output_folder_path = Path('./outputs_yolov8')
+    output_folder_path.mkdir(parents=True, exist_ok=True)
+
+    img_paths = [sys.argv[1]]
+    for img_path in img_paths:
+        image = [cv2.imread(img_path)]
+        out_paths = [(output_folder_path / f"{Path(img_path).stem}_output{Path(img_path).suffix}").as_posix()]
+        if not isinstance(image[0], np.ndarray):
+            print('Error in image loading. Check your image file.')
+            sys.exit(1)
+        pre_processed_image = preprocess(image)
+    
+        model = YOLOv8(*get_variant_multiples(conf), num_classes=80)
+        model.load_state_dict(torch.load("yolov8l_scratch.pt"))
+        model.eval()
+    
+        import torchvision
+        torchvision.utils.save_image(pre_processed_image, "blabla.png")
+        st = time.time()
+        predictions = model(pre_processed_image)
+        print(f'did inference in {int(round(((time.time() - st) * 1000)))}ms')
+    
+        with torch.no_grad():
+            post_predictions = postprocess(preds=predictions, img=pre_processed_image, orig_imgs=image)
+    
+        class_labels = [s.strip() for s in open("coco.names", "r").readlines()]
+    
+        draw_bounding_boxes_and_save(orig_img_paths=img_paths, output_img_paths=out_paths, all_predictions=post_predictions, class_labels=class_labels)
