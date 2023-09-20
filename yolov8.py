@@ -81,13 +81,16 @@ class Conv_Block(nn.Module):
             groups=groups,
             bias=False,
         )
-        self.bn = nn.BatchNorm2d(c2, eps=1e-3)
+        self.bn = nn.BatchNorm2d(c2, eps=0.001)
         self.silu = nn.SiLU()
 
     def forward(self, x):
         x = self.conv(x)
+        np.save("convblock/conv_torch.npy", x.detach().numpy())
         x = self.bn(x)
+        np.save("convblock/bn_torch.npy", x.detach().numpy())
         x = self.silu(x)
+        np.save("convblock/silu_torch.npy", x.detach().numpy())
         return x
 
 
@@ -216,11 +219,17 @@ class Darknet(nn.Module):
         return [self.b1, self.b2, self.b3, self.b4, self.b5]
 
     def forward(self, x):
+        np.save("backbone/input_torch.npy", x.detach().numpy())
         x1 = self.b1(x)
+        np.save("backbone/b1_torch.npy", x1.detach().numpy())
         x2 = self.b2(x1)
+        np.save("backbone/b2_torch.npy", x2.detach().numpy())
         x3 = self.b3(x2)
+        np.save("backbone/b3_torch.npy", x3.detach().numpy())
         x4 = self.b4(x3)
+        np.save("backbone/b4_torch.npy", x4.detach().numpy())
         x5 = self.b5(x4)
+        np.save("backbone/b5_torch.npy", x5.detach().numpy())
         return (x2, x3, x5)
 
 
@@ -327,7 +336,14 @@ class YOLOv8(nn.Module):
 
     def forward(self, x):
         x = self.net(x)
+        np.save("network/net0_torch.npy", x[0].numpy())
+        np.save("network/net1_torch.npy", x[1].numpy())
+        np.save("network/net2_torch.npy", x[2].numpy())
         x = self.fpn(*x)
+        np.save("network/fpn0_torch.npy", x[0].numpy())
+        np.save("network/fpn1_torch.npy", x[1].numpy())
+        np.save("network/fpn2_torch.npy", x[2].numpy())
+        x = self.head(x)
         return self.head(x)
 
     def return_all_trainable_modules(self):
@@ -381,7 +397,8 @@ if __name__ == "__main__":
         import torchvision
         torchvision.utils.save_image(pre_processed_image, "blabla.png")
         st = time.time()
-        predictions = model(pre_processed_image)
+        with torch.no_grad():
+            predictions = model(pre_processed_image)
         print(f'did inference in {int(round(((time.time() - st) * 1000)))}ms')
     
         with torch.no_grad():
