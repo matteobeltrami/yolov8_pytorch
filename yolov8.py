@@ -38,7 +38,7 @@ def make_anchors(feats, strides, grid_cell_offset=0.5):
     anchor_points = torch.cat(anchor_points, dim=0)
     stride_tensor = torch.cat(stride_tensor, dim=0).unsqueeze(1)
 
-    return anchor_points, stride_tensor
+    return anchor_points.to(feats[0].device), stride_tensor.to(feats[0].device)
 
 
 def dist2bbox(distance, anchor_points, xywh=True, dim=-1):
@@ -66,9 +66,9 @@ class Upsample:
         return upsampled
 
 
-class Conv_Block(nn.Module):
+class Conv(nn.Module):
     def __init__(
-        self, c1, c2, kernel_size=1, stride=1, padding=0, dilation=1, groups=1
+        self, c1, c2, kernel_size=1, stride=1, padding=None, dilation=1, groups=1
     ):
         super().__init__()
         self.conv = nn.Conv2d(
@@ -86,11 +86,11 @@ class Conv_Block(nn.Module):
 
     def forward(self, x):
         x = self.conv(x)
-        np.save("convblock/conv_torch.npy", x.detach().numpy())
+        np.save("convblock/conv_torch.npy", x.cpu().detach().numpy())
         x = self.bn(x)
-        np.save("convblock/bn_torch.npy", x.detach().numpy())
+        np.save("convblock/bn_torch.npy", x.cpu().detach().numpy())
         x = self.silu(x)
-        np.save("convblock/silu_torch.npy", x.detach().numpy())
+        np.save("convblock/silu_torch.npy", x.cpu().detach().numpy())
         return x
 
 
@@ -106,9 +106,9 @@ class Bottleneck(nn.Module):
     ):
         super().__init__()
         c_ = int(c2 * channel_factor)
-        self.cv1 = Conv_Block(c1, c_, kernel_size=kernels[0], stride=1, padding=1)
-        self.cv2 = Conv_Block(
-            c_, c2, kernel_size=kernels[1], stride=1, padding=1, groups=groups
+        self.cv1 = Conv(c1, c_, kernel_size=kernels[0], stride=1, padding=None)
+        self.cv2 = Conv(
+            c_, c2, kernel_size=kernels[1], stride=1, padding=None, groups=groups
         )
         self.residual = c1 == c2 and shortcut
 
@@ -123,12 +123,12 @@ class C2f(nn.Module):
     def __init__(self, c1, c2, n=1, shortcut=False, groups=1, e=0.5):
         super().__init__()
         self.c = int(c2 * e)
-        self.cv1 = Conv_Block(
+        self.cv1 = Conv(
             c1,
             2 * self.c,
             1,
         )
-        self.cv2 = Conv_Block((2 + n) * self.c, c2, 1)
+        self.cv2 = Conv((2 + n) * self.c, c2, 1)
         self.bottleneck = nn.ModuleList([
             Bottleneck(
                 self.c,
@@ -155,8 +155,8 @@ class SPPF(nn.Module):
     def __init__(self, c1, c2, k=5):
         super().__init__()
         c_ = c1 // 2
-        self.cv1 = Conv_Block(c1, c_, 1, 1, padding=0)
-        self.cv2 = Conv_Block(c_ * 4, c2, 1, 1, padding=0)
+        self.cv1 = Conv(c1, c_, 1, 1, padding=None)
+        self.cv2 = Conv(c_ * 4, c2, 1, 1, padding=None)
         self.maxpool = lambda x: F.max_pool2d(
             F.pad(x, (k // 2, k // 2, k // 2, k // 2)), kernel_size=k, stride=1
         )
@@ -194,20 +194,20 @@ class Darknet(nn.Module):
     def __init__(self, w, r, d):
         super().__init__()
         self.b1 = nn.Sequential(
-            Conv_Block(c1=3, c2=int(64 * w), kernel_size=3, stride=2, padding=1),
-            Conv_Block(int(64 * w), int(128 * w), kernel_size=3, stride=2, padding=1),
+            Conv(c1=3, c2=int(64 * w), kernel_size=3, stride=2, padding=1),
+            Conv(int(64 * w), int(128 * w), kernel_size=3, stride=2, padding=1),
         )
         self.b2 = nn.Sequential(
             C2f(c1=int(128 * w), c2=int(128 * w), n=round(3 * d), shortcut=True),
-            Conv_Block(int(128 * w), int(256 * w), 3, 2, 1),
+            Conv(int(128 * w), int(256 * w), 3, 2, 1),
             C2f(int(256 * w), int(256 * w), round(6 * d), True),
         )
         self.b3 = nn.Sequential(
-            Conv_Block(int(256 * w), int(512 * w), kernel_size=3, stride=2, padding=1),
+            Conv(int(256 * w), int(512 * w), kernel_size=3, stride=2, padding=1),
             C2f(int(512 * w), int(512 * w), round(6 * d), True),
         )
         self.b4 = nn.Sequential(
-            Conv_Block(
+            Conv(
                 int(512 * w), int(512 * w * r), kernel_size=3, stride=2, padding=1
             ),
             C2f(int(512 * w * r), int(512 * w * r), round(3 * d), True),
@@ -219,17 +219,17 @@ class Darknet(nn.Module):
         return [self.b1, self.b2, self.b3, self.b4, self.b5]
 
     def forward(self, x):
-        np.save("backbone/input_torch.npy", x.detach().numpy())
+        np.save("backbone/input_torch.npy", x.cpu().detach().numpy())
         x1 = self.b1(x)
-        np.save("backbone/b1_torch.npy", x1.detach().numpy())
+        np.save("backbone/b1_torch.npy", x1.cpu().detach().numpy())
         x2 = self.b2(x1)
-        np.save("backbone/b2_torch.npy", x2.detach().numpy())
+        np.save("backbone/b2_torch.npy", x2.cpu().detach().numpy())
         x3 = self.b3(x2)
-        np.save("backbone/b3_torch.npy", x3.detach().numpy())
+        np.save("backbone/b3_torch.npy", x3.cpu().detach().numpy())
         x4 = self.b4(x3)
-        np.save("backbone/b4_torch.npy", x4.detach().numpy())
+        np.save("backbone/b4_torch.npy", x4.cpu().detach().numpy())
         x5 = self.b5(x4)
-        np.save("backbone/b5_torch.npy", x5.detach().numpy())
+        np.save("backbone/b5_torch.npy", x5.cpu().detach().numpy())
         return (x2, x3, x5)
 
 
@@ -241,11 +241,11 @@ class Yolov8Neck(nn.Module):
             c1=int(512 * w * (1 + r)), c2=int(512 * w), n=round(3 * d), shortcut=False
         )
         self.n2 = C2f(c1=int(768 * w), c2=int(256 * w), n=round(3 * d), shortcut=False)
-        self.n3 = Conv_Block(
+        self.n3 = Conv(
             c1=int(256 * w), c2=int(256 * w), kernel_size=3, stride=2, padding=1
         )
         self.n4 = C2f(c1=int(768 * w), c2=int(512 * w), n=round(3 * d), shortcut=False)
-        self.n5 = Conv_Block(
+        self.n5 = Conv(
             c1=int(512 * w), c2=int(512 * w), kernel_size=3, stride=2, padding=1
         )
         self.n6 = C2f(
@@ -287,8 +287,8 @@ class DetectionHead(nn.Module):
         self.cv2 = nn.ModuleList(
             [
                 nn.Sequential(
-                    Conv_Block(x, c2, 3, padding=1),
-                    Conv_Block(c2, c2, 3, padding=1),
+                    Conv(x, c2, 3, padding=1),
+                    Conv(c2, c2, 3, padding=1),
                     nn.Conv2d(c2, 4 * self.ch, 1),
                 )
                 for x in filters
@@ -297,8 +297,8 @@ class DetectionHead(nn.Module):
         self.cv3 = nn.ModuleList(
             [
                 nn.Sequential(
-                    Conv_Block(x, c1, 3, padding=1),
-                    Conv_Block(c1, c1, 3, padding=1),
+                    Conv(x, c1, 3, padding=1),
+                    Conv(c1, c1, 3, padding=1),
                     nn.Conv2d(c1, self.nc, 1),
                 )
                 for x in filters
@@ -336,15 +336,15 @@ class YOLOv8(nn.Module):
 
     def forward(self, x):
         x = self.net(x)
-        np.save("network/net0_torch.npy", x[0].numpy())
-        np.save("network/net1_torch.npy", x[1].numpy())
-        np.save("network/net2_torch.npy", x[2].numpy())
+        np.save("network/net0_torch.npy", x[0].cpu().numpy())
+        np.save("network/net1_torch.npy", x[1].cpu().numpy())
+        np.save("network/net2_torch.npy", x[2].cpu().numpy())
         x = self.fpn(*x)
-        np.save("network/fpn0_torch.npy", x[0].numpy())
-        np.save("network/fpn1_torch.npy", x[1].numpy())
-        np.save("network/fpn2_torch.npy", x[2].numpy())
+        np.save("network/fpn0_torch.npy", x[0].cpu().numpy())
+        np.save("network/fpn1_torch.npy", x[1].cpu().numpy())
+        np.save("network/fpn2_torch.npy", x[2].cpu().numpy())
         x = self.head(x)
-        return self.head(x)
+        return x
 
     def return_all_trainable_modules(self):
         backbone_modules = [*range(10)]
@@ -391,14 +391,26 @@ if __name__ == "__main__":
         pre_processed_image = preprocess(image)
     
         model = YOLOv8(*get_variant_multiples(conf), num_classes=80)
-        model.load_state_dict(torch.load("yolov8l_scratch.pt"))
+        # model.load_state_dict(torch.load("yolov8l_scratch.pt"))
+        model.load_state_dict(torch.load("ultra_dict.pt"), strict=False)
+        print("Imported checkpoint yolov8l_scratch.pt")
+
+        breakpoint()
         model.eval()
+        model.to("cuda:1")
+
+        with torch.no_grad():
+            # on = torch.ones(1, 3, 128, 128)
+            on = torch.ones_like(pre_processed_image).to("cuda:1") * 16
+            # on = pre_processed_image.to("cuda:1")
+            out = model.net.b1[0].conv(on)
+            np.save("sanity_check/conv_ones_torch.npy", out.cpu().numpy())
     
         import torchvision
         torchvision.utils.save_image(pre_processed_image, "blabla.png")
         st = time.time()
         with torch.no_grad():
-            predictions = model(pre_processed_image)
+            predictions = model(pre_processed_image.to("cuda:1")).cpu()
         print(f'did inference in {int(round(((time.time() - st) * 1000)))}ms')
     
         with torch.no_grad():

@@ -24,7 +24,9 @@ if __name__ == "__main__":
 
     for i,u in enumerate(uu):
         assert our_dict[ii[i]].shape == dat[u].shape
-        our_dict[ii[i]] = torch.Tensor(dat[u])
+        our_dict[ii[i]] = torch.Tensor(dat[u] if dat[u].size != 1 else [float(dat[u])])
+
+        assert (our_dict[ii[i]].numpy() == dat[u]).all(), f"Failed at: {ii[i]}. \n Values are {dat[u]} \n {our_dict[ii[i]]}."
 
     torch.save(our_dict, "yolov8l_scratch.pt")
 
