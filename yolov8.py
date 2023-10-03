@@ -447,6 +447,7 @@ if __name__ == "__main__":
 
         #breakpoint()
         model.eval()
+        # torch.save(model, "yoloexport.pt")
 
         # with torch.no_grad():
         #     # on = torch.ones(1, 3, 128, 128)
