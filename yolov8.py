@@ -8,6 +8,48 @@ import numpy as np
 import sys
 import cv2
 
+# ### chat
+
+# import cv2
+# import numpy as np
+
+# # Funzione per il post-processing dei risultati
+# def post_processs(output, conf_threshold=0.5, nms_threshold=0.5):
+#     # Estrai le confidence, bounding box e class predictions
+#     boxes, confidences, class_ids = [], [], []
+#     for detection in output:
+#         scores = detection[5:]
+#         class_id = np.argmax(np.array(scores).max(axis=1))
+#         confidence = scores[class_id].max()
+#         breakpoint()
+#         if confidence > conf_threshold:
+#             width, height = 1600, 1067
+#             center_x, center_y, width, height = detection[:4] * np.array([width, height, width, height])
+#             x, y = center_x - width / 2, center_y - height / 2
+#             boxes.append([x, y, width, height])
+#             confidences.append(float(confidence))
+#             class_ids.append(class_id)
+
+#     # Applica NMS (Non-Maximum Suppression)
+#     indices = cv2.dnn.NMSBoxes(boxes, confidences, conf_threshold, nms_threshold)
+
+#     # Restituisci le informazioni dei bounding box filtrati
+#     filtered_boxes = [boxes[i] for i in indices]
+#     filtered_confidences = [confidences[i] for i in indices]
+#     filtered_class_ids = [class_ids[i] for i in indices]
+
+#     return filtered_boxes, filtered_confidences, filtered_class_ids
+
+# # Funzione per il disegno dei bounding box sulle immagini
+# def draw_boxess(image, boxes, class_ids, class_names):
+#     colors = np.random.uniform(0, 255, size=(len(class_names), 3))
+
+#     for i, (box, class_id) in enumerate(zip(boxes, class_ids)):
+#         x, y, w, h = map(int, box)
+#         color = colors[class_id]
+#         label = f"{class_names[class_id]}: {confidences[i]:.2f}"
+#         cv2.rectangle(image, (x, y), (x + w, y + h), color, 2)
+#         cv2.putText(image, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
 # this function is from the original implementation
 def autopad(k, p=None, d=1):  # kernel, padding, dilation
@@ -81,16 +123,16 @@ class Conv(nn.Module):
             groups=groups,
             bias=False,
         )
-        self.bn = nn.BatchNorm2d(c2, eps=0.001)
+        self.bn = nn.BatchNorm2d(c2, eps=0.001, momentum=0.03)
         self.silu = nn.SiLU()
 
     def forward(self, x):
         x = self.conv(x)
-        np.save("convblock/conv_torch.npy", x.cpu().detach().numpy())
+        #np.save("convblock/conv_torch.npy", x.cpu().detach().numpy())
         x = self.bn(x)
-        np.save("convblock/bn_torch.npy", x.cpu().detach().numpy())
+        #np.save("convblock/bn_torch.npy", x.cpu().detach().numpy())
         x = self.silu(x)
-        np.save("convblock/silu_torch.npy", x.cpu().detach().numpy())
+        #np.save("convblock/silu_torch.npy", x.cpu().detach().numpy())
         return x
 
 
@@ -157,9 +199,10 @@ class SPPF(nn.Module):
         c_ = c1 // 2
         self.cv1 = Conv(c1, c_, 1, 1, padding=None)
         self.cv2 = Conv(c_ * 4, c2, 1, 1, padding=None)
-        self.maxpool = lambda x: F.max_pool2d(
-            F.pad(x, (k // 2, k // 2, k // 2, k // 2)), kernel_size=k, stride=1
-        )
+        # self.maxpool = lambda x: F.max_pool2d(
+        #     F.pad(x, (k // 2, k // 2, k // 2, k // 2)), kernel_size=k, stride=1
+        # )
+        self.maxpool = nn.MaxPool2d(kernel_size=5, stride=1, padding=2, dilation=1, ceil_mode=False)
 
     def forward(self, x):
         x = self.cv1(x)
@@ -219,17 +262,17 @@ class Darknet(nn.Module):
         return [self.b1, self.b2, self.b3, self.b4, self.b5]
 
     def forward(self, x):
-        np.save("backbone/input_torch.npy", x.cpu().detach().numpy())
+        #np.save("backbone/input_torch.npy", x.cpu().detach().numpy())
         x1 = self.b1(x)
-        np.save("backbone/b1_torch.npy", x1.cpu().detach().numpy())
+        #np.save("backbone/b1_torch.npy", x1.cpu().detach().numpy())
         x2 = self.b2(x1)
-        np.save("backbone/b2_torch.npy", x2.cpu().detach().numpy())
+        #np.save("backbone/b2_torch.npy", x2.cpu().detach().numpy())
         x3 = self.b3(x2)
-        np.save("backbone/b3_torch.npy", x3.cpu().detach().numpy())
+        #np.save("backbone/b3_torch.npy", x3.cpu().detach().numpy())
         x4 = self.b4(x3)
-        np.save("backbone/b4_torch.npy", x4.cpu().detach().numpy())
+        #np.save("backbone/b4_torch.npy", x4.cpu().detach().numpy())
         x5 = self.b5(x4)
-        np.save("backbone/b5_torch.npy", x5.cpu().detach().numpy())
+        #np.save("backbone/b5_torch.npy", x5.cpu().detach().numpy())
         return (x2, x3, x5)
 
 
@@ -281,15 +324,15 @@ class DetectionHead(nn.Module):
         self.nc = nc
         self.nl = len(filters)
         self.no = nc + self.ch * 4
-        self.stride = [8, 16, 32]
+        self.stride = [8, 16, 32] # number downsampling
         c1 = max(filters[0], self.nc)
         c2 = max((filters[0] // 4, self.ch * 4))
         self.cv2 = nn.ModuleList(
             [
                 nn.Sequential(
-                    Conv(x, c2, 3, padding=1),
-                    Conv(c2, c2, 3, padding=1),
-                    nn.Conv2d(c2, 4 * self.ch, 1),
+                    Conv(x, c2, 3),#, padding=1),
+                    Conv(c2, c2, 3),#, padding=1),
+                    nn.Conv2d(c2, 4 * self.ch, (1, 1), stride=(1,1), padding=autopad(1, None, 1)),
                 )
                 for x in filters
             ]
@@ -297,9 +340,9 @@ class DetectionHead(nn.Module):
         self.cv3 = nn.ModuleList(
             [
                 nn.Sequential(
-                    Conv(x, c1, 3, padding=1),
-                    Conv(c1, c1, 3, padding=1),
-                    nn.Conv2d(c1, self.nc, 1),
+                    Conv(x, c1, 3),#, padding=1),
+                    Conv(c1, c1, 3),#, padding=1),
+                    nn.Conv2d(c1, self.nc, (1, 1), stride=(1,1), padding=autopad(1, None, 1)),
                 )
                 for x in filters
             ]
@@ -307,10 +350,13 @@ class DetectionHead(nn.Module):
         self.dfl = DFL(self.ch)
 
     def forward(self, x):
-        for i in range(self.nl):
+        ab = []
+        for i in range(self.nl): #for number heads
             a = self.cv2[i](x[i])
             b = self.cv3[i](x[i])
+            ab.append((a, b, x[i]))
             x[i] = torch.cat((a, b), dim=1)
+        #return ab
         self.anchors, self.strides = (
             ii.transpose(0, 1) for ii in make_anchors(x, self.stride, 0.5)
         )
@@ -336,13 +382,13 @@ class YOLOv8(nn.Module):
 
     def forward(self, x):
         x = self.net(x)
-        np.save("network/net0_torch.npy", x[0].cpu().numpy())
-        np.save("network/net1_torch.npy", x[1].cpu().numpy())
-        np.save("network/net2_torch.npy", x[2].cpu().numpy())
+        #np.save("network/net0_torch.npy", x[0].cpu().numpy())
+        #np.save("network/net1_torch.npy", x[1].cpu().numpy())
+        #np.save("network/net2_torch.npy", x[2].cpu().numpy())
         x = self.fpn(*x)
-        np.save("network/fpn0_torch.npy", x[0].cpu().numpy())
-        np.save("network/fpn1_torch.npy", x[1].cpu().numpy())
-        np.save("network/fpn2_torch.npy", x[2].cpu().numpy())
+        #np.save("network/fpn0_torch.npy", x[0].cpu().numpy())
+        #np.save("network/fpn1_torch.npy", x[1].cpu().numpy())
+        #np.save("network/fpn2_torch.npy", x[2].cpu().numpy())
         x = self.head(x)
         return x
 
@@ -380,7 +426,7 @@ if __name__ == "__main__":
 
     output_folder_path = Path('./outputs_yolov8')
     output_folder_path.mkdir(parents=True, exist_ok=True)
-
+    import torchvision
     img_paths = [sys.argv[1]]
     for img_path in img_paths:
         image = [cv2.imread(img_path)]
@@ -388,30 +434,37 @@ if __name__ == "__main__":
         if not isinstance(image[0], np.ndarray):
             print('Error in image loading. Check your image file.')
             sys.exit(1)
+       
         pre_processed_image = preprocess(image)
     
-        model = YOLOv8(*get_variant_multiples(conf), num_classes=80)
-        # model.load_state_dict(torch.load("yolov8l_scratch.pt"))
-        model.load_state_dict(torch.load("ultra_dict.pt"), strict=False)
+        model = YOLOv8(*get_variant_multiples(conf), num_classes=80).half()
+        
+        model.load_state_dict(torch.load("yolov8l_scratch.pt"), strict=True)
+
+        #model = torch.load("../notebooks/yolov8l.pt")["model"]
+        model = model.float()
         print("Imported checkpoint yolov8l_scratch.pt")
 
-        breakpoint()
+        #breakpoint()
         model.eval()
-        model.to("cuda:1")
 
-        with torch.no_grad():
-            # on = torch.ones(1, 3, 128, 128)
-            on = torch.ones_like(pre_processed_image).to("cuda:1") * 16
-            # on = pre_processed_image.to("cuda:1")
-            out = model.net.b1[0].conv(on)
-            np.save("sanity_check/conv_ones_torch.npy", out.cpu().numpy())
+        # with torch.no_grad():
+        #     # on = torch.ones(1, 3, 128, 128)
+        #     on = torch.ones_like(pre_processed_image) * 16
+        #     # on = pre_processed_image.to("cuda:1")
+        #     out = model.net.b1[0].conv(on)
+        #     #np.save("sanity_check/conv_ones_torch.npy", out.cpu().numpy())
     
-        import torchvision
+        
         torchvision.utils.save_image(pre_processed_image, "blabla.png")
         st = time.time()
+        
         with torch.no_grad():
-            predictions = model(pre_processed_image.to("cuda:1")).cpu()
+            print(pre_processed_image.shape)
+            predictions = model(pre_processed_image).cpu()
         print(f'did inference in {int(round(((time.time() - st) * 1000)))}ms')
+        #predictions = torch.load("./ultra_model.pt")
+        breakpoint()
     
         with torch.no_grad():
             post_predictions = postprocess(preds=predictions, img=pre_processed_image, orig_imgs=image)
