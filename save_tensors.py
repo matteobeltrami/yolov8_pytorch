@@ -12,7 +12,7 @@ if __name__ == "__main__":
     model = model.float()
     inn = torch.randn(1, 3, 64, 64)
 
-    ultra_dict = torch.load("../notebooks/yolov8l.pt")
+    ultra_dict = torch.load("yolov8l.pt")
     ultra_model = ultra_dict["model"].model[:23].float()
 
     model.eval()
@@ -160,23 +160,18 @@ if __name__ == "__main__":
     #print(torch.isclose(ab[0][0], out_torch[0]).sum() / out_torch[0].numel())
     #print(torch.isclose(ab[0][2], out_torch[2]).sum() / out_torch[2].numel())
     #print(torch.isclose(z, out_torch).sum() / out_torch.numel())
-    breakpoint()
 
     import matplotlib.pyplot as plt
     ultra_result = detect_22[0]
 
-    breakpoint()
     plt.figure(figsize=(10,6))
 
-    print(np.log10(abs(ultra_result[0].detach()-out_torch[0].detach())+1e-9))
     plt.imshow(np.log10(abs(z[0].detach()-out_torch[0].detach())+1e-9))
     
     plt.colorbar()
     plt.show()
     # plt.imshow(out_torch[0])
     # plt.show() 
-
-    print(torch.isclose(ultra_result, out_torch).sum() / out_torch.numel())
     
     #np.save("convblock/convblock_ultra.npy", out_conv_block.cpu().numpy())
     #np.save("convblock/convblock_torch.npy", out_conv_block.cpu().numpy())

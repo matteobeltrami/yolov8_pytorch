@@ -34,6 +34,7 @@ import sys; sys.path.append("/Users/francescopaissan/dev/yolov8_pytorch")
 from yolov8 import *
 our_model = YOLOv8(1, 1, 1, num_classes=80)
 our_model.load_state_dict(torch.load("yolov8l_scratch.pt"), strict=True)
+our_model.eval()
 print("loaded our model")
 
 import cv2
@@ -136,10 +137,16 @@ class BasePredictor:
     def inference(self, im, *args, **kwargs):
         visualize = increment_path(self.save_dir / Path(self.batch[0][0]).stem,
                                    mkdir=True) if self.args.visualize and (not self.source_type.tensor) else False
-        tmp = self.model(im, augment=self.args.augment, visualize=visualize)
+        # tmp = self.model(im, augment=self.args.augment, visualize=visualize)
+        tmp = self.model.model(im)
         tmp2 = our_model(im)
+        self.model.model.eval()
+        for p1, p2 in zip(self.model.model.parameters(), our_model.parameters()):
+            print(p1.shape, p2.shape)
+
         breakpoint()
-        return tmp[0], None
+        # return tmp[0], None
+        return tmp2, None
 
     def pre_transform(self, im):
         """

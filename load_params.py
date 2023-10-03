@@ -13,7 +13,7 @@ if __name__ == "__main__":
     our_dict = model.state_dict()
     #dat = np.load("yolov8l.npz")
     #uu = dat.files
-    dat = torch.load("../notebooks/yolov8l.pt")["model"].state_dict()
+    dat = torch.load("yolov8l.pt")["model"].state_dict()
     uu = dat.keys()
 
 
