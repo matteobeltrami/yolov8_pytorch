@@ -69,7 +69,7 @@ class Detect(nn.Module):
             dbox /= img_size
 
         y = torch.cat((dbox, cls.sigmoid()), 1)
-        return y if self.export else (y, x)
+        return y
 
     def bias_init(self):
         """Initialize Detect() biases, WARNING: requires stride availability."""

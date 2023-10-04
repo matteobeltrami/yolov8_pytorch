@@ -142,7 +142,8 @@ class BasePredictor:
         tmp2 = our_model(im)
         self.model.model.eval()
         for p1, p2 in zip(self.model.model.parameters(), our_model.parameters()):
-            print(p1.shape, p2.shape)
+            pass
+            # print(p1.shape, p2.shape)
 
         breakpoint()
         # return tmp[0], None

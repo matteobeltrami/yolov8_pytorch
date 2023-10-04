@@ -64,23 +64,20 @@ def autopad(k, p=None, d=1):  # kernel, padding, dilation
 
 
 def make_anchors(feats, strides, grid_cell_offset=0.5):
+    """Generate anchors from features."""
+    print("ours", "called make_anchors with ", len(feats), strides)
     anchor_points, stride_tensor = [], []
     assert feats is not None
-
+    dtype, device = feats[0].dtype, feats[0].device
+    # print([f.shape for f in feats])
     for i, stride in enumerate(strides):
         _, _, h, w = feats[i].shape
-        sx = torch.arange(w, dtype=torch.float32) + grid_cell_offset
-        sy = torch.arange(h, dtype=torch.float32) + grid_cell_offset
-
-        grid_x, grid_y = torch.meshgrid(sx, sy, indexing="ij")  # to avoid warning
-
-        anchor_points.append(torch.stack((grid_x, grid_y), dim=-1).reshape(-1, 2))
-        stride_tensor.append(torch.full((h * w,), stride, dtype=torch.float32))
-
-    anchor_points = torch.cat(anchor_points, dim=0)
-    stride_tensor = torch.cat(stride_tensor, dim=0).unsqueeze(1)
-
-    return anchor_points.to(feats[0].device), stride_tensor.to(feats[0].device)
+        sx = torch.arange(end=w, device=device, dtype=dtype) + grid_cell_offset  # shift x
+        sy = torch.arange(end=h, device=device, dtype=dtype) + grid_cell_offset  # shift y
+        sy, sx = torch.meshgrid(sy, sx, indexing='ij')
+        anchor_points.append(torch.stack((sx, sy), -1).view(-1, 2))
+        stride_tensor.append(torch.full((h * w, 1), stride, dtype=dtype, device=device))
+    return torch.cat(anchor_points), torch.cat(stride_tensor)
 
 
 def dist2bbox(distance, anchor_points, xywh=True, dim=-1):
@@ -320,34 +317,16 @@ class Yolov8Neck(nn.Module):
 class DetectionHead(nn.Module):
     def __init__(self, nc=80, filters=()):
         super().__init__()
-        self.ch = 16
+        self.reg_max = 16
         self.nc = nc
         self.nl = len(filters)
-        self.no = nc + self.ch * 4
-        self.stride = [8, 16, 32] # number downsampling
-        c1 = max(filters[0], self.nc)
-        c2 = max((filters[0] // 4, self.ch * 4))
+        self.no = nc + self.reg_max * 4
+        self.stride = torch.tensor([8., 16., 32.], dtype=torch.float16)
+        c2, c3 = max((16, filters[0] // 4, self.reg_max * 4)), max(filters[0], min(self.nc, 104))  # channels
         self.cv2 = nn.ModuleList(
-            [
-                nn.Sequential(
-                    Conv(x, c2, 3),#, padding=1),
-                    Conv(c2, c2, 3),#, padding=1),
-                    nn.Conv2d(c2, 4 * self.ch, (1, 1), stride=(1,1), padding=autopad(1, None, 1)),
-                )
-                for x in filters
-            ]
-        )
-        self.cv3 = nn.ModuleList(
-            [
-                nn.Sequential(
-                    Conv(x, c1, 3),#, padding=1),
-                    Conv(c1, c1, 3),#, padding=1),
-                    nn.Conv2d(c1, self.nc, (1, 1), stride=(1,1), padding=autopad(1, None, 1)),
-                )
-                for x in filters
-            ]
-        )
-        self.dfl = DFL(self.ch)
+            nn.Sequential(Conv(x, c2, 3), Conv(c2, c2, 3), nn.Conv2d(c2, 4 * self.reg_max, 1)) for x in filters)
+        self.cv3 = nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.nc, 1)) for x in filters)
+        self.dfl = DFL(self.reg_max)
 
     def forward(self, x):
         ab = []
@@ -356,13 +335,11 @@ class DetectionHead(nn.Module):
             b = self.cv3[i](x[i])
             ab.append((a, b, x[i]))
             x[i] = torch.cat((a, b), dim=1)
-        #return ab
-        self.anchors, self.strides = (
-            ii.transpose(0, 1) for ii in make_anchors(x, self.stride, 0.5)
-        )
+        self.anchors, self.strides = (x.transpose(0, 1) for x in make_anchors(x, self.stride, 0.5))
+
         y = [(i.reshape(x[0].shape[0], self.no, -1)) for i in x]
         x_cat = torch.cat((y[0], y[1], y[2]), dim=2)
-        box, cls = x_cat[:, : self.ch * 4], x_cat[:, self.ch * 4 :]
+        box, cls = x_cat[:, : self.reg_max * 4], x_cat[:, self.reg_max * 4 :]
         dbox = (
             dist2bbox(self.dfl(box), self.anchors.unsqueeze(0), xywh=True, dim=1)
             * self.strides
@@ -460,8 +437,10 @@ if __name__ == "__main__":
         torchvision.utils.save_image(pre_processed_image, "blabla.png")
         st = time.time()
         
+        ultra_model = torch.load("yolov8l.pt")["model"].float()
         with torch.no_grad():
             print(pre_processed_image.shape)
+            # predictions = ultra_model(pre_processed_image)[0].cpu()
             predictions = model(pre_processed_image).cpu()
         print(f'did inference in {int(round(((time.time() - st) * 1000)))}ms')
         #predictions = torch.load("./ultra_model.pt")
