@@ -2,18 +2,18 @@ import numpy as np
 import torch
 import sys
 
-from yolov8 import YOLOv8
+from yolov8 import YOLOv8, get_variant_multiples
 
 
 def count_id(x, key): return len([x_ for x_ in x if key in x_])
 
 if __name__ == "__main__":
-    model = YOLOv8(1,1,1)
+    model = YOLOv8(*get_variant_multiples("x"))
     ii = list(model.state_dict().keys())
     our_dict = model.state_dict()
     #dat = np.load("yolov8l.npz")
     #uu = dat.files
-    dat = torch.load("yolov8l.pt")["model"].state_dict()
+    dat = torch.load("yolov8x.pt")["model"].state_dict()
     uu = dat.keys()
 
 
@@ -34,5 +34,5 @@ if __name__ == "__main__":
         print(our_dict[ii[i]].dtype , dat[u].dtype)
         assert (our_dict[ii[i]] == dat[u]).all(), f"Failed at: {ii[i]}."# \n Values are {dat[u]} \n {our_dict[ii[i]]}."
 
-    torch.save(our_dict, "yolov8l_scratch.pt")
+    torch.save(our_dict, "yolov8x_scratch.pt")
 

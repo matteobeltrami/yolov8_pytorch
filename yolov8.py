@@ -397,7 +397,7 @@ if __name__ == "__main__":
     print(len(sys.argv))
     if len(sys.argv) <= 2:
         print("Falling back on L model. Configuration was not passed.")
-        conf = "l"
+        conf = "x"
     else:
         conf = str(sys.argv[2])
 
@@ -416,7 +416,7 @@ if __name__ == "__main__":
     
         model = YOLOv8(*get_variant_multiples(conf), num_classes=80).half()
         
-        model.load_state_dict(torch.load("yolov8l_scratch.pt"), strict=True)
+        model.load_state_dict(torch.load("yolov8x_scratch.pt"), strict=True)
 
         #model = torch.load("../notebooks/yolov8l.pt")["model"]
         model = model.float()
