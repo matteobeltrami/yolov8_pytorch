@@ -459,7 +459,7 @@ class DetectionHead(nn.Module):
             b = self.cv3[i](x[i])
             x[i] = torch.cat((a, b), dim=1)
         self.anchors, self.strides = (
-            x.transpose(0, 1) for x in make_anchors(x, self.stride, 0.5)
+            xl.transpose(0, 1) for xl in make_anchors(x, self.stride, 0.5)
         )
 
         y = [(i.reshape(x[0].shape[0], self.no, -1)) for i in x]
@@ -470,7 +470,7 @@ class DetectionHead(nn.Module):
             * self.strides
         )
         z = torch.cat((dbox, nn.Sigmoid()(cls)), dim=1)
-        return z
+        return z, x
 
 
 class YOLOv8(nn.Module):
