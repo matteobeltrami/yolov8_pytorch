@@ -1,7 +1,7 @@
 """
 Authors:
-    - Francesco Paissan, 2023
     - Matteo Beltrami, 2023
+    - Francesco Paissan, 2023
 
 This code is used to obtain a version of the yolov8 model with pre-trained
 weights that can be used with the implementation of the network present in
@@ -30,10 +30,13 @@ def download_variant(variant):
     https://github.com/ultralytics/assets/releases/ and saves the
     downloaded file in the current working directory.
 
-    Args:
-        variant ([str]): yolov8 model variant. Default to 'l'.
+    Arguments
+    ---------
+    variant : str
+        yolov8 model variant. Default to 'l'.
 
-    Returns:
+    Returns
+    -------
         None
     """
     url = f"https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8{variant}.pt"

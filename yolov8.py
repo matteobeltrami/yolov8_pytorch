@@ -2,8 +2,8 @@
 YOLOv8 inference.
 
 Authors:
-    - Francesco Paissan, 2023
     - Matteo Beltrami, 2023
+    - Francesco Paissan, 2023
 
 This code allows you to launch an object detection inference using the yolov8 model.
 To launch this script, pass as arguments the path of the image on which to perform

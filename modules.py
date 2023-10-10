@@ -2,8 +2,8 @@
 YOLOv8 building blocks.
 
 Authors:
-    - Francesco Paissan, 2023
     - Matteo Beltrami, 2023
+    - Francesco Paissan, 2023
 
 This file contains the definition of the building blocks of the yolov8 network.
 Model architecture has been taken from https://github.com/ultralytics/ultralytics/issues/189

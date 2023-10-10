@@ -2,8 +2,8 @@
 Helper functions.
 
 Authors:
-    - Francesco Paissan, 2023
     - Matteo Beltrami, 2023
+    - Francesco Paissan, 2023
 """
 
 import numpy as np
@@ -27,6 +27,26 @@ def get_variant_multiples(variant):
 
 
 def autopad(k, p=None, d=1):  # kernel, padding, dilation
+    """Calculate padding value for a convolution operation based on kernel size and dilation.
+
+    This function computes the padding value for a convolution operation to
+    maintain the spatial size of the input tensor.
+    
+    Arguments
+    ---------
+    k : int
+        Kernel size for the convolution operation. If a single integer
+        is provided, it's assumed that all dimensions have the same kernel size.
+    p : int, optional
+        Padding value for the convolution operation. If not provided,
+        it will be calculated to maintain the spatial size of the input tensor.
+    d : int, optional
+        Dilation for the convolution operation. Default is 1.
+
+    Returns
+    -------
+        The padding value to maintain the spatial size of the input tensor : int
+    """
     if d > 1:
         k = (
             d * (k - 1) + 1 if isinstance(k, int) else [d * (x - 1) + 1 for x in k]
@@ -38,7 +58,30 @@ def autopad(k, p=None, d=1):  # kernel, padding, dilation
 
 
 def make_anchors(feats, strides, grid_cell_offset=0.5):
-    """Generate anchors from features."""
+    """Generate anchor points and stride tensors.
+
+    This function generates anchor points for each feature map and stride
+    combination. 
+    It is commonly used in object detection tasks to define anchor boxes.
+
+    Arguments
+    ---------
+    feats : torch.Tensor
+        A feature map (tensor) from which anchor points will be generated.
+    strides : torch.Tensor
+        Stride values corresponding to each feature map.
+        Strides define the spacing between anchor points.
+    grid_cell_offset : float, optional
+        Offset to be added to the grid cell coordinates when
+        generating anchor points. Default is 0.5.
+
+    Returns
+    -------
+    anchor_points : torch.Tensor
+        Concatenated anchor points for all feature maps as a 2D tensor.
+    stride_tensor : torch.Tensor
+        Concatenated stride values for all anchor points as a 2D tensor.
+    """
     anchor_points, stride_tensor = [], []
     assert feats is not None
     dtype, device = feats[0].dtype, feats[0].device
@@ -57,6 +100,32 @@ def make_anchors(feats, strides, grid_cell_offset=0.5):
 
 
 def dist2bbox(distance, anchor_points, xywh=True, dim=-1):
+    """Convert distance predictions to bounding box coordinates.
+
+    This function takes distance predictions and anchor points to calculate
+    bounding box coordinates.
+    
+    Arguments
+    ---------
+    distance : torch.Tensor
+        Tensor containing distance predictions. 
+        It should be in the format [lt, rb] if `xywh` is True,
+        or [x1y1, x2y2] if `xywh` is False.
+    anchor_points : torch.Tensor
+        Tensor containing anchor points used for the conversion.
+    xywh : bool, optional
+        If True, the function returns bounding boxes in the format
+        [center_x, center_y, width, height]. 
+        If False, it returns bounding boxes in the format [x1, y1, x2, y2].
+        Default is True.
+    dim : int, optional
+        The dimension along which the tensor is split into lt and rb.
+        Default is -1.
+
+    Returns
+    -------
+        Converted bounding box coordinates in the specified format : torch.Tensors
+    """
     lt, rb = torch.chunk(distance, chunks=2, dim=dim)
     x1y1 = anchor_points - lt
     x2y2 = anchor_points + rb
@@ -70,6 +139,38 @@ def dist2bbox(distance, anchor_points, xywh=True, dim=-1):
 def compute_transform(
     image, new_shape=(640, 640), auto=False, scaleFill=False, scaleup=True, stride=32
 ):
+    """Compute a transformation of an image to the specified size and format.
+
+    This function computes a transformation of the input image to the specified
+    new size and format, while optionally maintaining the aspect ratio or adding
+    padding as needed.
+    
+    Arguments
+    ---------
+    image : numpy.ndarray
+        The input image to be transformed.
+    new_shape : int or tuple, optional
+        The target size of the transformed image. If an integer is provided,
+        the image is resized to have the same width and height.
+        If a tuple of two integers is provided, it represents the new width
+        and height. Default is (640, 640).
+    auto : bool, optional
+        If True, automatically calculates padding to ensure the output size
+        is divisible by the specified `stride`. Default is False.
+    scaleFill : bool, optional
+        If True, scales the image to completely fill the target size without
+        maintaining the aspect ratio. Default is False.
+    scaleup : bool, optional
+        If True, allows the image to be scaled up (enlarged) if necessary.
+        Default is True.
+    stride : int, optional
+        The stride value used for padding calculation when `auto` is True.
+        Default is 32.
+
+    Returns
+    -------
+        The transformed image : numpy.ndarray
+    """
     shape = image.shape[:2]  # current shape [height, width]
     new_shape = (new_shape, new_shape) if isinstance(new_shape, int) else new_shape
     r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
@@ -94,6 +195,34 @@ def compute_transform(
 
 
 def preprocess(im, imgsz=640, model_stride=32, model_pt=True):
+    """Preprocess a batch of images for inference.
+
+    This function preprocesses a batch of images for inference by
+    resizing, transforming, and normalizing them.
+    
+    Arguments
+    ---------
+    im : list of numpy.ndarray or numpy.ndarray
+        A batch of input images to be preprocessed. 
+        Can be a list of images or a single image as a numpy array.
+    imgsz : int, optional
+        The target size of the images after preprocessing. 
+        Default is 640.
+    model_stride : int, optional
+        The stride value used for padding calculation when `auto` is True
+        in `compute_transform`. Default is 32.
+    model_pt : bool, optional
+        If True, the function automatically calculates the padding to
+        maintain the same shapes for all input images in the batch. 
+        Default is True.
+
+    Returns
+    -------
+    torch.Tensor
+        The preprocessed batch of images as a torch.Tensor with shape
+        (n, 3, h, w), where n is the number of images, 3 represents the
+        RGB channels, and h and w are the height and width of the images.
+    """
     same_shapes = all(x.shape == im[0].shape for x in im)
     auto = same_shapes and model_pt
     im = torch.Tensor(
@@ -105,7 +234,6 @@ def preprocess(im, imgsz=640, model_stride=32, model_pt=True):
         )
     )
     im = torch.stack(im) if im.shape[0] > 1 else im
-    # im = im[..., ::-1].permute(0, 3, 1, 2)  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
     im = torch.flip(im, (-1,)).permute(
         0, 3, 1, 2
     )  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
@@ -115,10 +243,42 @@ def preprocess(im, imgsz=640, model_stride=32, model_pt=True):
 
 # Post Processing functions
 def box_area(box):
+    """Calculate the area of bounding boxes.
+
+    This function calculates the area of bounding boxes
+    represented as [x1, y1, x2, y2].
+
+    Arguments
+    ---------
+    box : torch.Tensor
+        A tensor containing bounding boxes in the format [x1, y1, x2, y2].
+
+    Returns
+    -------
+        A tensor containing the area of each bounding box : torch.Tensor
+    """
     return (box[:, 2] - box[:, 0]) * (box[:, 3] - box[:, 1])
 
 
 def box_iou(box1, box2):
+    """Calculate the Intersection over Union (IoU) between two sets
+    of bounding boxes.
+
+    This function computes the IoU between two sets of bounding boxes.
+
+    Arguments
+    ---------
+    box1 : numpy.ndarray
+        The first set of bounding boxes in the format [x1, y1, x2, y2].
+    box2 : numpy.ndarray
+        The second set of bounding boxes in the format [x1, y1, x2, y2].
+
+    Returns
+    -------
+    numpy.ndarray
+        A 2D numpy array containing the IoU between each pair of bounding
+        boxes in box1 and box2.
+    """
     lt = np.maximum(box1[:, None, :2], box2[:, :2])
     rb = np.minimum(box1[:, None, 2:], box2[:, 2:])
     wh = np.clip(rb - lt, 0, None)
@@ -127,19 +287,6 @@ def box_iou(box1, box2):
     area2 = box_area(box2)[None, :]
     iou = inter / (area1 + area2 - inter)
     return iou
-
-
-def compute_nms(boxes, scores, iou_threshold):
-    order, keep = scores.argsort()[::-1], []
-    while order.size > 0:
-        i = order[0]
-        keep.append(i)
-        if order.size == 1:
-            break
-        iou = box_iou(boxes[i][None, :], boxes[order[1:]])
-        inds = np.where(iou.squeeze() <= iou_threshold)[0]
-        order = order[inds + 1]
-    return np.array(keep)
 
 
 def non_max_suppression(
@@ -275,6 +422,26 @@ def non_max_suppression(
 
 
 def postprocess(preds, img, orig_imgs):
+    """Perform post-processing on the predictions.
+
+    This function applies post-processing to the predictions,
+    including Non-Maximum Suppression (NMS) and scaling of bounding boxes.
+
+    Arguments
+    ---------
+    preds : list of numpy.ndarray
+        A list of prediction arrays from the object detection model.
+    img : numpy.ndarray
+        The input image on which the predictions were made.
+    orig_imgs : numpy.ndarray or list of numpy.ndarray
+        The original image(s) before any preprocessing.
+
+    Returns
+    -------
+    list of numpy.ndarray
+        A list of post-processed prediction arrays, each containing bounding
+        boxes and associated information.
+    """
     print("copying to CPU now for post processing")
     # if you are on CPU, this causes an overflow runtime error. doesn't "seem" to make any difference in the predictions though.
     # TODO: make non_max_suppression in tinygrad - to make this faster
@@ -299,6 +466,31 @@ def postprocess(preds, img, orig_imgs):
 def draw_bounding_boxes_and_save(
     orig_img_paths, output_img_paths, all_predictions, class_labels, iou_threshold=0.5
 ):
+    """Draw bounding boxes on images based on object detection predictions and
+    save the result.
+
+    This function draws bounding boxes on images based on object detection
+    predictions and saves the result. It also prints the number of objects
+    detected for each class.
+
+    Arguments
+    ---------
+    orig_img_paths : list of str
+        A list of file paths to the original input images.
+    output_img_paths : list of str
+        A list of file paths to save the images with bounding boxes.
+    all_predictions : list of list of numpy.ndarray
+        A list of lists of prediction arrays from the object detection model.
+    class_labels : list of str
+        A list of class labels corresponding to the object classes.
+    iou_threshold : float, optional
+        The IoU threshold used for non-maximum suppression to remove
+        overlapping bounding boxes. Default is 0.5.
+
+    Returns
+    -------
+        None
+    """
     color_dict = {
         label: tuple(
             (((i + 1) * 50) % 256, ((i + 1) * 100) % 256, ((i + 1) * 150) % 256)
@@ -382,12 +574,53 @@ def draw_bounding_boxes_and_save(
 
 
 def clip_boxes(boxes, shape):
+    """Clip bounding boxes to stay within image boundaries.
+
+    This function clips bounding boxes to ensure that they stay within the
+    boundaries of the image.
+
+    Arguments
+    ---------
+    boxes : numpy.ndarray
+        An array containing bounding boxes in the format [x1, y1, x2, y2].
+    shape : tuple
+        A tuple representing the shape of the image in the format (height, width).
+
+    Returns
+    -------
+        An array containing the clipped bounding boxes : numpy.ndarray
+    """
     boxes[..., [0, 2]] = np.clip(boxes[..., [0, 2]], 0, shape[1])  # x1, x2
     boxes[..., [1, 3]] = np.clip(boxes[..., [1, 3]], 0, shape[0])  # y1, y2
     return boxes
 
 
 def scale_boxes(img1_shape, boxes, img0_shape, ratio_pad=None):
+    """Scale bounding boxes to match a different image shape.
+
+    This function scales bounding boxes to match a different image
+    shape while maintaining their aspect ratio.
+
+    Arguments
+    ---------
+    img1_shape : tuple
+        A tuple representing the shape of the target image in the
+        format (height, width).
+    boxes : numpy.ndarray or torch.Tensor
+        An array or tensor containing bounding boxes in the
+        format [x1, y1, x2, y2].
+    img0_shape : tuple
+        A tuple representing the shape of the source image in the
+        format (height, width).
+    ratio_pad : float or None, optional
+        A scaling factor for the bounding boxes.
+        If None, it is calculated based on the aspect ratio of the images.
+        Default is None.
+
+    Returns
+    -------
+        A tensor containing the scaled bounding boxes : torch.Tensor
+    """
     gain = (
         ratio_pad
         if ratio_pad
@@ -406,6 +639,26 @@ def scale_boxes(img1_shape, boxes, img0_shape, ratio_pad=None):
 
 
 def xywh2xyxy(x):
+    """Convert bounding box coordinates from (x, y, width, height)
+    to (x1, y1, x2, y2) format.
+
+    This function converts bounding box coordinates from the format
+    (center_x, center_y, width, height) to the format (x1, y1, x2, y2),
+    where (x1, y1) represents the top-left corner and (x2, y2) represents
+    the bottom-right corner of the bounding box.
+
+    Arguments
+    ---------
+    x : numpy.ndarray or torch.Tensor
+        An array or tensor containing bounding box coordinates in the
+        format (center_x, center_y, width, height).
+
+    Returns
+    -------
+    torch.Tensor
+        A tensor containing bounding box coordinates in the
+        format (x1, y1, x2, y2).
+    """
     xy = x[..., :2]  # center x, y
     wh = x[..., 2:4]  # width, height
     xy1 = xy - wh / 2  # top left x, y
@@ -415,6 +668,22 @@ def xywh2xyxy(x):
 
 
 def label_predictions(all_predictions):
+    """Count the number of predictions for each class.
+
+    This function counts the number of predictions for each class
+    in a list of prediction arrays.
+
+    Arguments
+    ---------
+    all_predictions : list of list of numpy.ndarray
+        A list of lists of prediction arrays from the object detection model.
+
+    Returns
+    -------
+    dict
+        A dictionary where the keys are class indices and the values are
+        the counts of predictions for each class.
+    """
     class_index_count = defaultdict(int)
     for predictions in all_predictions:
         predictions = np.array(predictions)
