@@ -36,7 +36,10 @@ if __name__ == "__main__":
     else:
         conf = str(sys.argv[2])
 
-    weights_file = f"yolov8{conf}.pt"
+    conf = "l"
+
+    weights_file = str(sys.argv[2])
+    # weights_file = "yolov8l.pt"
     output_folder_path = Path("./outputs_yolov8")
     output_folder_path.mkdir(parents=True, exist_ok=True)
     img_paths = [sys.argv[1]]
@@ -53,8 +56,10 @@ if __name__ == "__main__":
             sys.exit(1)
 
         pre_processed_image = preprocess(image)
-        model = YOLOv8(*get_variant_multiples(conf), num_classes=80).half()
-        model.load_state_dict(torch.load(weights_file), strict=True)
+        model = YOLOv8(*get_variant_multiples(conf), num_classes=80)
+        model.load_state_dict(torch.load(weights_file)["yolo"], strict=True)
+        # model = YOLOv8(*get_variant_multiples(conf), num_classes=80).half()
+        # model.load_state_dict(torch.load(weights_file), strict=True)
         print(f"Imported checkpoint {weights_file}")
         model = model.float()
         model.eval()
@@ -62,7 +67,7 @@ if __name__ == "__main__":
         st = time.time()
 
         with torch.no_grad():
-            predictions = model(pre_processed_image).cpu()
+            predictions = model(pre_processed_image)[0].cpu()
             print(f"Did inference in {int(round(((time.time() - st) * 1000)))}ms")
             post_predictions = postprocess(
                 preds=predictions, img=pre_processed_image, orig_imgs=image
