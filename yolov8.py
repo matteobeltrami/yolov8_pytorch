@@ -22,7 +22,6 @@ from modules import *
 
 
 if __name__ == "__main__":
-
     assert len(sys.argv) > 1
     if len(sys.argv) <= 2:
         print("Falling back on yolov8l model. Configuration was not passed.")

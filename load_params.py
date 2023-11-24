@@ -51,7 +51,6 @@ def download_variant(variant):
 
 
 if __name__ == "__main__":
-
     valid_conf = ["n", "s", "m", "l", "x"]
     if len(sys.argv) < 2 or len(sys.argv[1]) > 1 or sys.argv[1] not in valid_conf:
         print(

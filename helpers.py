@@ -31,7 +31,7 @@ def autopad(k, p=None, d=1):  # kernel, padding, dilation
 
     This function computes the padding value for a convolution operation to
     maintain the spatial size of the input tensor.
-    
+
     Arguments
     ---------
     k : int
@@ -61,7 +61,7 @@ def make_anchors(feats, strides, grid_cell_offset=0.5):
     """Generate anchor points and stride tensors.
 
     This function generates anchor points for each feature map and stride
-    combination. 
+    combination.
     It is commonly used in object detection tasks to define anchor boxes.
 
     Arguments
@@ -104,18 +104,18 @@ def dist2bbox(distance, anchor_points, xywh=True, dim=-1):
 
     This function takes distance predictions and anchor points to calculate
     bounding box coordinates.
-    
+
     Arguments
     ---------
     distance : torch.Tensor
-        Tensor containing distance predictions. 
+        Tensor containing distance predictions.
         It should be in the format [lt, rb] if `xywh` is True,
         or [x1y1, x2y2] if `xywh` is False.
     anchor_points : torch.Tensor
         Tensor containing anchor points used for the conversion.
     xywh : bool, optional
         If True, the function returns bounding boxes in the format
-        [center_x, center_y, width, height]. 
+        [center_x, center_y, width, height].
         If False, it returns bounding boxes in the format [x1, y1, x2, y2].
         Default is True.
     dim : int, optional
@@ -144,7 +144,7 @@ def compute_transform(
     This function computes a transformation of the input image to the specified
     new size and format, while optionally maintaining the aspect ratio or adding
     padding as needed.
-    
+
     Arguments
     ---------
     image : numpy.ndarray
@@ -199,21 +199,21 @@ def preprocess(im, imgsz=640, model_stride=32, model_pt=True):
 
     This function preprocesses a batch of images for inference by
     resizing, transforming, and normalizing them.
-    
+
     Arguments
     ---------
     im : list of numpy.ndarray or numpy.ndarray
-        A batch of input images to be preprocessed. 
+        A batch of input images to be preprocessed.
         Can be a list of images or a single image as a numpy array.
     imgsz : int, optional
-        The target size of the images after preprocessing. 
+        The target size of the images after preprocessing.
         Default is 640.
     model_stride : int, optional
         The stride value used for padding calculation when `auto` is True
         in `compute_transform`. Default is 32.
     model_pt : bool, optional
         If True, the function automatically calculates the padding to
-        maintain the same shapes for all input images in the batch. 
+        maintain the same shapes for all input images in the batch.
         Default is True.
 
     Returns
@@ -442,9 +442,6 @@ def postprocess(preds, img, orig_imgs):
         A list of post-processed prediction arrays, each containing bounding
         boxes and associated information.
     """
-    print("copying to CPU now for post processing")
-    # if you are on CPU, this causes an overflow runtime error. doesn't "seem" to make any difference in the predictions though.
-    # TODO: make non_max_suppression in tinygrad - to make this faster
     preds = preds
     preds = non_max_suppression(
         prediction=preds,
